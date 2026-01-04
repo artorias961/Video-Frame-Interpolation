@@ -25,6 +25,146 @@ I have collected these projects into **one local workspace** to:
 - Strictly personal research & experimentation
 
 
+# Nice to Know
+
+## Core Principle (Read First)
+
+**Interpolation adds frames — it does NOT decide playback speed.**
+
+Playback speed is decided by:
+- Timeline FPS
+- Export FPS
+- Player / display refresh rate
+
+If these do not match, **sync problems are guaranteed**.
+
+## Baseline: Original Video
+
+| Property | Value |
+|-------|------|
+| FPS | ~29.97 / 30 |
+| Duration | Reference |
+| Purpose | Source material |
+
+
+## Workflow A — High‑FPS (≈131 fps)
+
+### How it is created
+
+```powershell
+python inference_video.py --video piplup.mp4 --exp 2 --scale 1
+```
+
+### Expected output
+
+| Property | Value |
+|-------|------|
+| FPS | ~120–132 fps |
+| Duration | Same as original |
+| Motion | Extremely smooth |
+| File size | Large |
+| Editing stability | Low |
+
+Example output:
+```
+piplup_4X_132fps.mp4
+```
+
+### What this workflow is GOOD for
+
+- Research / benchmarking
+- Demonstrating interpolation quality
+- Slow‑motion generation
+- High‑refresh (120–144 Hz) displays
+
+### What this workflow is BAD for
+
+- Mixed‑FPS timelines
+- DaVinci Resolve comparisons
+- Delivery to most platforms
+- Stable editing
+
+⚠️ Editors must **drop frames unevenly**, causing visual desync.
+
+
+## Workflow B — Locked‑FPS (30 or 60 fps)
+
+### Method 1 — Interpolate then lock (recommended)
+
+```powershell
+python inference_video.py --video piplup.mp4 --exp 2 --scale 1
+ffmpeg -i piplup_4X_132fps.mp4 -vf fps=60 piplup_60fps_master.mp4
+```
+
+### Method 2 — Direct 2× interpolation
+
+```powershell
+python inference_video.py --video piplup.mp4 --exp 1 --scale 1
+```
+
+### Expected output
+
+| Target FPS | Result |
+|---------|--------|
+| 30 fps | Original timing, smoother motion |
+| 60 fps | Best balance of smoothness + stability |
+
+### Why locking FPS works better
+
+- Editors map frames **1:1**
+- No uneven frame dropping
+- No retime artifacts
+- Predictable playback
+- Easier comparison
+
+This is why **professional pipelines always lock FPS before editing**.
+
+
+
+## Direct Comparison
+
+| Feature | ≈131 fps | Locked 30/60 fps |
+|------|---------|----------------|
+| Smoothness potential | Very high | High |
+| Visual stability | Medium | Very high |
+| Editor sync | ❌ Poor | ✅ Stable |
+| Comparison shots | ❌ Difficult | ✅ Easy |
+| Real‑world delivery | ❌ Rare | ✅ Standard |
+| File size | Very large | Reasonable |
+
+
+## Common Mistakes (DO NOT DO THIS)
+
+### ❌ Forcing FPS on import
+
+```powershell
+ffmpeg -r 30 -i input.mp4
+```
+
+This causes:
+- Timing distortion
+- Slow motion
+- Uneven frame spacing
+
+### ❌ Mixing FPS in an editor
+
+- 30 fps + 60 fps + 132 fps on one timeline
+- Optical Flow on interpolated clips
+- Auto‑conform timelines
+
+This guarantees desync.
+
+
+## DaVinci Resolve Rule (Critical)
+
+> **Timeline FPS is the master clock.**
+
+All clips must:
+- Match timeline FPS
+- Have retiming disabled
+- Avoid Optical Flow
+
+
 
 ## Directory Structure
 
@@ -71,159 +211,173 @@ If you are the author of any of these projects and have concerns, this setup is 
 
 # NOTES FOR RIFE (ECCV2022-RIFE) — Video FPS Increase + High-Quality Encoding
 
-This README documents a **working end-to-end pipeline** to:
-1) Increase video FPS / create slow motion using **RIFE (ECCV2022)**  
-2) Re-encode the result with **FFmpeg + x264 `-preset veryslow`** for best quality
-
-Platform tested: **Windows (PowerShell) + Conda**
-
-
-
-## 1. Create Conda Environment
+## 1. Create Environment
 
 ```powershell
 conda create -n rife python=3.10 -y
 conda activate rife
-```
-
-(Optional) Jupyter:
-```powershell
-conda install -c conda-forge notebook ipykernel -y
-python -m ipykernel install --user --name rife --display-name "Python (rife)"
-```
-
-
-
-## 2. Clone Repository
-
-```powershell
-git clone https://github.com/hzwer/ECCV2022-RIFE.git
-cd ECCV2022-RIFE
-```
-
-
-
-## 3. Install PyTorch
-
-### NVIDIA GPU (recommended)
-Example for CUDA 12.1:
-```powershell
+conda install -c conda-forge ffmpeg -y
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Verify:
+Verify GPU:
 ```powershell
 python -c "import torch; print(torch.cuda.is_available())"
 ```
 
 
 
-## 4. Install FFmpeg and Requirements
+## 2. Run RIFE – Frame Interpolation
 
-```powershell
-conda install -c conda-forge ffmpeg -y
-pip install -r requirements.txt
-```
+### 2× Interpolation (Recommended)
 
-
-
-## 5. Download Pretrained Model (HD v3.6)
-
-Download:
-- `RIFE_trained_model_v3.6.zip`
-
-Extract **contents** into `train_log/`.
-
-Correct structure:
-```
-ECCV2022-RIFE/
-├─ inference_video.py
-├─ train_log/
-│  ├─ flownet.pkl
-│  ├─ IFNet_HDv3.py
-│  └─ RIFE_HDv3.py
-```
-
-
-
-## 6. Add Your Video
-
-Place your input video in the repo root:
-```
-ECCV2022-RIFE/
-├─ inference_video.py
-├─ piplup.mp4
-└─ train_log/
-```
-
-
-
-## 7. Run Interpolation (RIFE)
-
-### Best quality default (2× FPS)
 ```powershell
 python inference_video.py --video piplup.mp4 --exp 1 --scale 1
 ```
 
-### Slower motion (4×)
+**Expected result**
+| Property | Value |
+|------|------|
+| FPS | ~60–66 fps |
+| Duration | Same as original |
+| Purpose | Smooth motion |
+
+Output example:
+```
+piplup_2X_66fps.mp4
+```
+
+
+
+### 4× Interpolation (Very Smooth / Heavy)
+
 ```powershell
 python inference_video.py --video piplup.mp4 --exp 2 --scale 1
 ```
 
-### Cleanest very-slow motion (recommended)
-Run multiple passes:
-```powershell
-python inference_video.py --video piplup.mp4 --exp 1 --scale 1
-python inference_video.py --video piplup_2X_66fps.mp4 --exp 1 --scale 1
+**Expected result**
+| Property | Value |
+|------|------|
+| FPS | ~120–132 fps |
+| Duration | Same as original |
+| Purpose | Extreme smoothness |
+
+Output example:
+```
+piplup_4X_132fps.mp4
 ```
 
 
 
-## 8. Encode with FFmpeg (High Quality)
+## 3. Verify FPS (Critical Step)
 
-RIFE improves **motion**. FFmpeg improves **compression quality**.
+Always verify before encoding:
 
-### Recommended encode
 ```powershell
-ffmpeg -i "piplup_2X_66fps.mp4" `
-  -c:v libx264 -preset veryslow -crf 16 `
+ffmpeg -i piplup_4X_132fps.mp4
+```
+
+Correct output example:
+```
+Video: ..., 131.9 fps
+Duration: unchanged
+```
+
+If FPS is lower than expected → **stop**.
+
+
+
+## 4. Encode Correctly (Preserve Smoothness)
+
+### ✅ Correct Encoding (DO THIS)
+
+```powershell
+ffmpeg -i piplup_4X_132fps.mp4 `
+  -c:v libx264 `
+  -preset veryslow `
+  -crf 16 `
   -pix_fmt yuv420p `
+  -profile:v high `
+  -level 5.1 `
+  -movflags +faststart `
   -c:a copy `
-  "piplup_2X_veryslow.mp4"
+  piplup_4X_smooth_x264.mp4
 ```
 
-### Maximum quality
+**Why this works**
+- FPS preserved automatically
+- No timing changes
+- Stable playback at high FPS
+
+
+
+## 5. Commands You MUST NOT Use
+
+### ❌ DO NOT FORCE FPS
+
 ```powershell
-ffmpeg -i "piplup_2X_66fps.mp4" `
-  -c:v libx264 -preset veryslow -crf 14 `
-  -pix_fmt yuv420p `
-  -c:a copy `
-  "piplup_2X_crf14_veryslow.mp4"
+ffmpeg -r 30 -i input.mp4 ...
+```
+
+**Why this breaks smoothness**
+- Forces high‑FPS video to play at low FPS
+- Causes slow motion
+- Makes interpolation pointless
+
+
+
+### ❌ DO NOT USE OLD CODECS
+
+Avoid:
+```
+-c:v mpeg4
+```
+
+Reasons:
+- Poor motion handling
+- Frame pacing jitter
+- Bad high‑FPS playback
+
+Always use:
+```
+-c:v libx264
 ```
 
 
+## 6. Playback (Important)
 
-## 9. Common Issues
+Use:
+- **mpv**
+- **VLC (hardware acceleration enabled)**
+- **MPC-HC**
 
-**PowerShell line breaks**
-- Use backtick `, not \
-
-**CUDA out of memory**
-- Lower scale:
-```powershell
---scale 0.5
-```
-
-**Audio missing**
-```powershell
-ffmpeg -i interpolated.mp4 -i piplup.mp4 -map 0:v -map 1:a -c copy final.mp4
-```
+Avoid:
+- Windows “Movies & TV”
+- Browser playback for evaluation
 
 
-## 10. Recommended Best-Quality Workflow
 
-1. Interpolate 2× (`--exp 1`)
-2. Optional second pass for 4×
-3. Encode with x264 `veryslow` + `crf 16`
+## 7. Summary Table
 
+| Step | Result |
+|----|----|
+| RIFE `--exp 1` | ~66 fps smooth |
+| RIFE `--exp 2` | ~132 fps very smooth |
+| FFmpeg (no `-r`) | Preserves smoothness |
+| FFmpeg with `-r` | Causes slow motion |
+| x264 | Stable playback |
+| mpeg4 | Choppy / misleading |
+
+
+
+## Final Takeaway
+
+If your video:
+- Has higher FPS
+- Same duration
+- Plays at that FPS
+
+Then you have achieved **true smoothness**.
+
+If duration increases → you made slow motion.
 
